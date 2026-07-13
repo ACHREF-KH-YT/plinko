@@ -19,6 +19,10 @@ interface PlinkoGameProps {
   bounceSoundFile: File | null;
   custom100xSfxFile: File | null;
   custom0xSfxFile: File | null;
+  bgMusicVolume: number;
+  bounceVolume: number;
+  jackpotVolume: number;
+  loseVolume: number;
   neonThemeColor: string;
   onHighlightClipped: (clip: HighlightClip) => void;
   clipsList: HighlightClip[];
@@ -38,6 +42,10 @@ export default function PlinkoGame({
   bounceSoundFile,
   custom100xSfxFile,
   custom0xSfxFile,
+  bgMusicVolume,
+  bounceVolume,
+  jackpotVolume,
+  loseVolume,
   neonThemeColor,
   onHighlightClipped,
   clipsList,
@@ -181,17 +189,36 @@ export default function PlinkoGame({
     }
   }, [custom0xSfxFile]);
 
-  // Sync Audio Play States
+  // Sync Background Audio Play States and Volume
   useEffect(() => {
     if (bgAudioRef.current) {
-      bgAudioRef.current.volume = isAudioOn ? 0.35 : 0;
+      bgAudioRef.current.volume = isAudioOn ? bgMusicVolume : 0;
       if (isPlaying && isAudioOn) {
         bgAudioRef.current.play().catch(() => {});
       } else {
         bgAudioRef.current.pause();
       }
     }
-  }, [isPlaying, isAudioOn]);
+  }, [isPlaying, isAudioOn, bgMusicVolume]);
+
+  // Sync Custom SFX Volumes
+  useEffect(() => {
+    if (customSfxRef.current) {
+      customSfxRef.current.volume = isAudioOn ? bounceVolume : 0;
+    }
+  }, [bounceVolume, isAudioOn]);
+
+  useEffect(() => {
+    if (custom100xSfxRef.current) {
+      custom100xSfxRef.current.volume = isAudioOn ? jackpotVolume : 0;
+    }
+  }, [jackpotVolume, isAudioOn]);
+
+  useEffect(() => {
+    if (custom0xSfxRef.current) {
+      custom0xSfxRef.current.volume = isAudioOn ? loseVolume : 0;
+    }
+  }, [loseVolume, isAudioOn]);
 
   // Reinitialize peg boards when spacing or rows change
   useEffect(() => {
@@ -297,7 +324,7 @@ export default function PlinkoGame({
   };
 
   // Audio peg collision Synthesizer chord player
-  const playSynthesizerNote = (frequency: number) => {
+  const playSynthesizerNote = (frequency: number, noteVolume: number = bounceVolume) => {
     if (!isAudioOn) return;
     try {
       if (!audioContextRef.current) {
@@ -315,7 +342,7 @@ export default function PlinkoGame({
       osc.type = 'triangle'; // Smooth mellow bell sound
       osc.frequency.setValueAtTime(frequency, ctx.currentTime);
       
-      gainNode.gain.setValueAtTime(0.35, ctx.currentTime);
+      gainNode.gain.setValueAtTime(noteVolume * 0.5, ctx.currentTime);
       gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.55);
 
       osc.connect(gainNode);
@@ -733,27 +760,27 @@ export default function PlinkoGame({
                 if (custom100xSfxFile) {
                   playCustom100xSfx();
                 } else {
-                  playSynthesizerNote(523.25); // C5
-                  setTimeout(() => playSynthesizerNote(659.25), 80); // E5
-                  setTimeout(() => playSynthesizerNote(783.99), 160); // G5
-                  setTimeout(() => playSynthesizerNote(1046.50), 240); // C6 super chime
+                  playSynthesizerNote(523.25, jackpotVolume); // C5
+                  setTimeout(() => playSynthesizerNote(659.25, jackpotVolume), 80); // E5
+                  setTimeout(() => playSynthesizerNote(783.99, jackpotVolume), 160); // G5
+                  setTimeout(() => playSynthesizerNote(1046.50, jackpotVolume), 240); // C6 super chime
                 }
                 triggerHighlightClip(bucket.multiplier, bucket.label);
               } else if (bucket.multiplier >= 10) {
-                playSynthesizerNote(523.25); // C5
-                setTimeout(() => playSynthesizerNote(659.25), 80); // E5
-                setTimeout(() => playSynthesizerNote(783.99), 160); // G5
+                playSynthesizerNote(523.25, bounceVolume); // C5
+                setTimeout(() => playSynthesizerNote(659.25, bounceVolume), 80); // E5
+                setTimeout(() => playSynthesizerNote(783.99, bounceVolume), 160); // G5
                 triggerHighlightClip(bucket.multiplier, bucket.label);
               } else if (bucket.multiplier === 0) {
                 if (custom0xSfxFile) {
                   playCustom0xSfx();
                 } else {
-                  playSynthesizerNote(146.83); // Low D3
-                  setTimeout(() => playSynthesizerNote(110.00), 100); // Low A2 failing pitch
-                  setTimeout(() => playSynthesizerNote(82.41), 220); // Low E2 failing pitch
+                  playSynthesizerNote(146.83, loseVolume); // Low D3
+                  setTimeout(() => playSynthesizerNote(110.00, loseVolume), 100); // Low A2 failing pitch
+                  setTimeout(() => playSynthesizerNote(82.41, loseVolume), 220); // Low E2 failing pitch
                 }
               } else {
-                playSynthesizerNote(261.63); // Simple C4 chime
+                playSynthesizerNote(261.63, bounceVolume); // Simple C4 chime
               }
 
               // Mark ball as dead after touchdown
@@ -777,9 +804,9 @@ export default function PlinkoGame({
             if (custom0xSfxFile) {
               playCustom0xSfx();
             } else {
-              playSynthesizerNote(110.00); // Very low A2 pitch
-              setTimeout(() => playSynthesizerNote(98.00), 120); // G2 pitch
-              setTimeout(() => playSynthesizerNote(82.41), 240); // Low E2 fail note
+              playSynthesizerNote(110.00, loseVolume); // Very low A2 pitch
+              setTimeout(() => playSynthesizerNote(98.00, loseVolume), 120); // G2 pitch
+              setTimeout(() => playSynthesizerNote(82.41, loseVolume), 240); // Low E2 fail note
             }
           }
 

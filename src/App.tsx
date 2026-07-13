@@ -34,6 +34,12 @@ export default function App() {
   const [custom0xSfxFile, setCustom0xSfxFile] = useState<File | null>(null);
   const [neonThemeColor, setNeonThemeColor] = useState('#22c55e');
 
+  // Individual volume control states (0.0 to 1.0)
+  const [bgMusicVolume, setBgMusicVolume] = useState<number>(0.35);
+  const [bounceVolume, setBounceVolume] = useState<number>(0.50);
+  const [jackpotVolume, setJackpotVolume] = useState<number>(0.70);
+  const [loseVolume, setLoseVolume] = useState<number>(0.70);
+
   // Sliced clips log
   const [clipsList, setClipsList] = useState<HighlightClip[]>([]);
 
@@ -99,6 +105,14 @@ export default function App() {
             setCustom100xSfxFile={setCustom100xSfxFile}
             custom0xSfxFile={custom0xSfxFile}
             setCustom0xSfxFile={setCustom0xSfxFile}
+            bgMusicVolume={bgMusicVolume}
+            setBgMusicVolume={setBgMusicVolume}
+            bounceVolume={bounceVolume}
+            setBounceVolume={setBounceVolume}
+            jackpotVolume={jackpotVolume}
+            setJackpotVolume={setJackpotVolume}
+            loseVolume={loseVolume}
+            setLoseVolume={setLoseVolume}
             neonThemeColor={neonThemeColor}
             setNeonThemeColor={setNeonThemeColor}
             clipsList={clipsList}
@@ -134,6 +148,10 @@ export default function App() {
               bounceSoundFile={bounceSoundFile}
               custom100xSfxFile={custom100xSfxFile}
               custom0xSfxFile={custom0xSfxFile}
+              bgMusicVolume={bgMusicVolume}
+              bounceVolume={bounceVolume}
+              jackpotVolume={jackpotVolume}
+              loseVolume={loseVolume}
               neonThemeColor={neonThemeColor}
               onHighlightClipped={handleHighlightClipped}
               clipsList={clipsList}

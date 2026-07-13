@@ -31,6 +31,14 @@ interface SidebarControlsProps {
   setCustom100xSfxFile: (f: File | null) => void;
   custom0xSfxFile: File | null;
   setCustom0xSfxFile: (f: File | null) => void;
+  bgMusicVolume: number;
+  setBgMusicVolume: (v: number) => void;
+  bounceVolume: number;
+  setBounceVolume: (v: number) => void;
+  jackpotVolume: number;
+  setJackpotVolume: (v: number) => void;
+  loseVolume: number;
+  setLoseVolume: (v: number) => void;
   neonThemeColor: string;
   setNeonThemeColor: (color: string) => void;
   customBgImage: string | null;
@@ -92,6 +100,10 @@ export default function SidebarControls({
   bounceSoundFile, setBounceSoundFile,
   custom100xSfxFile, setCustom100xSfxFile,
   custom0xSfxFile, setCustom0xSfxFile,
+  bgMusicVolume, setBgMusicVolume,
+  bounceVolume, setBounceVolume,
+  jackpotVolume, setJackpotVolume,
+  loseVolume, setLoseVolume,
   neonThemeColor, setNeonThemeColor,
   customBgImage, setCustomBgImage,
   clipsList, onClearClips
@@ -405,6 +417,22 @@ export default function SidebarControls({
                   }}
                   className="hidden"
                 />
+                <div className="flex items-center space-x-2 px-1 mt-1.5">
+                  <Volume2 className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
+                  <span className="text-[10px] text-slate-400 shrink-0">Music Vol:</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={bgMusicVolume}
+                    onChange={(e) => setBgMusicVolume(parseFloat(e.target.value))}
+                    className="flex-1 accent-cyan-500 bg-slate-950 h-1.5 rounded-lg cursor-pointer"
+                  />
+                  <span className="text-[10px] font-mono text-cyan-400 w-8 text-right font-bold">
+                    {Math.round(bgMusicVolume * 100)}%
+                  </span>
+                </div>
               </div>
 
               {/* Peg Bounce SFX upload */}
@@ -445,6 +473,22 @@ export default function SidebarControls({
                   }}
                   className="hidden"
                 />
+                <div className="flex items-center space-x-2 px-1 mt-1.5">
+                  <Volume2 className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
+                  <span className="text-[10px] text-slate-400 shrink-0">Bounce Vol:</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={bounceVolume}
+                    onChange={(e) => setBounceVolume(parseFloat(e.target.value))}
+                    className="flex-1 accent-cyan-500 bg-slate-950 h-1.5 rounded-lg cursor-pointer"
+                  />
+                  <span className="text-[10px] font-mono text-cyan-400 w-8 text-right font-bold">
+                    {Math.round(bounceVolume * 100)}%
+                  </span>
+                </div>
               </div>
 
               {/* 100x Multiplier Jackpot SFX upload */}
@@ -485,6 +529,22 @@ export default function SidebarControls({
                   }}
                   className="hidden"
                 />
+                <div className="flex items-center space-x-2 px-1 mt-1.5">
+                  <Volume2 className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                  <span className="text-[10px] text-slate-400 shrink-0">Jackpot Vol:</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={jackpotVolume}
+                    onChange={(e) => setJackpotVolume(parseFloat(e.target.value))}
+                    className="flex-1 accent-amber-500 bg-slate-950 h-1.5 rounded-lg cursor-pointer"
+                  />
+                  <span className="text-[10px] font-mono text-amber-400 w-8 text-right font-bold">
+                    {Math.round(jackpotVolume * 100)}%
+                  </span>
+                </div>
               </div>
 
               {/* 0x Multiplier Lose SFX upload */}
@@ -525,6 +585,22 @@ export default function SidebarControls({
                   }}
                   className="hidden"
                 />
+                <div className="flex items-center space-x-2 px-1 mt-1.5">
+                  <Volume2 className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                  <span className="text-[10px] text-slate-400 shrink-0">Lose Vol:</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={loseVolume}
+                    onChange={(e) => setLoseVolume(parseFloat(e.target.value))}
+                    className="flex-1 accent-red-500 bg-slate-950 h-1.5 rounded-lg cursor-pointer"
+                  />
+                  <span className="text-[10px] font-mono text-red-400 w-8 text-right font-bold">
+                    {Math.round(loseVolume * 100)}%
+                  </span>
+                </div>
               </div>
             </div>
           </div>
