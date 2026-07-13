@@ -1,0 +1,6 @@
+{
+  "name": "Plinko YouTube Shorts Generator",
+  "description": "Create and record high-adrenaline 9:16 Plinko videos for YouTube Shorts. Add custom photos, sound effects, configure peg grids, and trigger automated highlight clipping with slow-motion and AI meme commentaries.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
