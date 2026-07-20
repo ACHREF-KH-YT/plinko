@@ -625,198 +625,206 @@ export default function PlinkoGame({
 
       const frameDelta = elapsed / 16.67;
 
-      if (!isPlaying) {
-        animationFrameId.current = requestAnimationFrame(updateLoop);
-        return;
-      }
-
       // 1. DYNAMIC HIGHLIGHT DETECTION
       // Slow-motion suspense triggers when ball is nearing bottom jackpot bins (100x edge bins)
       let slowdownTarget = 1.0;
       let targetCameraZoom = 1.0;
       let activeFocusBall: PlinkoBall | null = null;
 
-      ballsRef.current.forEach((ball) => {
-        if (ball.y > binY - 260 && ball.y < binY) {
-          const isClosingInOnJackpot = ball.x < 160 || ball.x > width - 160;
-          if (isClosingInOnJackpot) {
-            slowdownTarget = 1.0; // Keep normal speed (no zoom slow-mo)
-            targetCameraZoom = 1.0; // Keep normal camera scale (no zoom)
-            activeFocusBall = null; // Do not focus/zoom camera on ball
-            
-            if (!ball.isHighlightTriggered) {
-              ball.isHighlightTriggered = true;
-              visualEffectsRef.current.bulletTimeActive = false;
-              triggerAICommentary(bucketsRef.current[ball.x < 160 ? 0 : bucketsRef.current.length - 1].multiplier, "OMG SUSPENSE!");
-            }
-          }
-        }
-      });
-
-      // Lerp bullet-time slow-mo and camera parameters for butter-smooth cinematic transitions
-      visualEffectsRef.current.slowdownFactor += (slowdownTarget - visualEffectsRef.current.slowdownFactor) * 0.12 * frameDelta;
-      visualEffectsRef.current.targetZoom += (targetCameraZoom - visualEffectsRef.current.targetZoom) * 0.08 * frameDelta;
-      
-      const dt = visualEffectsRef.current.slowdownFactor * frameDelta;
-
-      // 2. PHYSICS RESOLUTION
-      const steps = Math.max(1, Math.round(10 * dt));
-      for (let s = 0; s < steps; s++) {
-        const substepDt = dt / steps;
-
-        ballsRef.current.forEach((ball, bIdx) => {
-          if (ball.isDead) return;
-
-          // Gravity acceleration
-          ball.vy += gravity * substepDt;
-          ball.vx *= Math.pow(friction, substepDt);
-          ball.vy *= Math.pow(friction, substepDt);
-
-          // Position velocity mapping
-          ball.x += ball.vx * substepDt;
-          ball.y += ball.vy * substepDt;
-
-          // Trail update
-          if (Math.random() < 0.3) {
-            ball.trail.push({ x: ball.x, y: ball.y });
-            if (ball.trail.length > 12) ball.trail.shift();
-          }
-
-          // Wall boundary bounces
-          if (ball.x - ball.radius < 15) {
-            ball.x = 15 + ball.radius;
-            ball.vx = -ball.vx * bounceDamping;
-          } else if (ball.x + ball.radius > width - 15) {
-            ball.x = width - 15 - ball.radius;
-            ball.vx = -ball.vx * bounceDamping;
-          }
-
-          // Peg collisions
-          pegsRef.current.forEach((peg) => {
-            const dx = ball.x - peg.x;
-            const dy = ball.y - peg.y;
-            const distance = Math.hypot(dx, dy);
-            const minDist = ball.radius + peg.radius;
-            
-            if (distance < minDist) {
-              // Push ball outside overlap
-              const overlap = minDist - distance;
-              const nx = dx / distance;
-              const ny = dy / distance;
-              ball.x += nx * overlap;
-              ball.y += ny * overlap;
-
-              // Reflect velocity on vector normal
-              const dotProduct = ball.vx * nx + ball.vy * ny;
-              ball.vx = (ball.vx - 2 * dotProduct * nx) * bounceDamping;
-              ball.vy = (ball.vy - 2 * dotProduct * ny) * bounceDamping;
-
-              // Introduce minor scatter jitter to make Plinko random
-              ball.vx += (Math.random() - 0.5) * 0.5;
-
-              // Glow state on peg
-              peg.active = true;
-              peg.activationTime = 12;
-
-              // Synthesize tone mapped to peg vertical height pitch
-              const pegRowIndex = Math.floor((peg.y - 280) / 56);
-              const scaleNote = pentatonicScale[Math.max(0, pentatonicScale.length - 1 - (pegRowIndex % pentatonicScale.length))];
-              if (bounceSoundFile) {
-                playCustomSfx();
-              } else {
-                playSynthesizerNote(scaleNote);
+      if (isPlaying) {
+        ballsRef.current.forEach((ball) => {
+          if (ball.y > binY - 260 && ball.y < binY) {
+            const isClosingInOnJackpot = ball.x < 160 || ball.x > width - 160;
+            if (isClosingInOnJackpot) {
+              slowdownTarget = 1.0; // Keep normal speed (no zoom slow-mo)
+              targetCameraZoom = 1.0; // Keep normal camera scale (no zoom)
+              activeFocusBall = null; // Do not focus/zoom camera on ball
+              
+              if (!ball.isHighlightTriggered) {
+                ball.isHighlightTriggered = true;
+                visualEffectsRef.current.bulletTimeActive = false;
+                triggerAICommentary(bucketsRef.current[ball.x < 160 ? 0 : bucketsRef.current.length - 1].multiplier, "OMG SUSPENSE!");
               }
             }
-          });
-
-          // Check if ball lands in bucket or falls into physical gaps
-          if (ball.y + ball.radius > binY) {
-            const binWidth = width / bucketsRef.current.length;
-            const bucketWidth = binWidth * 0.76; // 76% width, 24% gap spacing!
-            let bucketIndex = Math.floor(ball.x / binWidth);
-            bucketIndex = Math.max(0, Math.min(bucketIndex, bucketsRef.current.length - 1));
-            const bucket = bucketsRef.current[bucketIndex];
-
-            const bucketXStart = bucket.x + (binWidth - bucketWidth) / 2;
-            const bucketXEnd = bucketXStart + bucketWidth;
-
-            // If it hits the solid floor/rim of the bucket
-            if (!ball.isLanded && !ball.isVoidProcessed && ball.x >= bucketXStart && ball.x <= bucketXEnd && ball.y + ball.radius < binY + 28) {
-              ball.isLanded = true;
-
-              // Record scorecard impact
-              setCurrentScoreEffect({
-                text: bucket.multiplier === 0 ? `0x LOST!` : `+${bucket.label}!`,
-                color: bucket.multiplier === 0 ? '#ef4444' : bucket.color,
-                scale: 1.5,
-              });
-              setTimeout(() => setCurrentScoreEffect(null), 1200);
-
-              // Add to wallet balance
-              setWalletBalance((prev) => prev + (10 * bucket.multiplier));
-
-              // Play nice synthesizer jackpot chord
-              if (bucket.multiplier === 100) {
-                if (custom100xSfxFile) {
-                  playCustom100xSfx();
-                } else {
-                  playSynthesizerNote(523.25, jackpotVolume); // C5
-                  setTimeout(() => playSynthesizerNote(659.25, jackpotVolume), 80); // E5
-                  setTimeout(() => playSynthesizerNote(783.99, jackpotVolume), 160); // G5
-                  setTimeout(() => playSynthesizerNote(1046.50, jackpotVolume), 240); // C6 super chime
-                }
-                triggerHighlightClip(bucket.multiplier, bucket.label);
-              } else if (bucket.multiplier >= 10) {
-                playSynthesizerNote(523.25, bounceVolume); // C5
-                setTimeout(() => playSynthesizerNote(659.25, bounceVolume), 80); // E5
-                setTimeout(() => playSynthesizerNote(783.99, bounceVolume), 160); // G5
-                triggerHighlightClip(bucket.multiplier, bucket.label);
-              } else if (bucket.multiplier === 0) {
-                if (custom0xSfxFile) {
-                  playCustom0xSfx();
-                } else {
-                  playSynthesizerNote(146.83, loseVolume); // Low D3
-                  setTimeout(() => playSynthesizerNote(110.00, loseVolume), 100); // Low A2 failing pitch
-                  setTimeout(() => playSynthesizerNote(82.41, loseVolume), 220); // Low E2 failing pitch
-                }
-              } else {
-                playSynthesizerNote(261.63, bounceVolume); // Simple C4 chime
-              }
-
-              // Mark ball as dead after touchdown
-              ball.isDead = true;
-            }
-          }
-
-          // If the ball slipped through a gap and falls past the bucket divider walls
-          if (ball.y - ball.radius > binY + 140 && !ball.isLanded && !ball.isVoidProcessed) {
-            ball.isVoidProcessed = true;
-
-            // No-win void!
-            setCurrentScoreEffect({
-              text: `0x LOST!`,
-              color: '#ef4444', // red
-              scale: 1.3,
-            });
-            setTimeout(() => setCurrentScoreEffect(null), 1500);
-
-            // Play a low-pitch lose/womp custom or synth chime
-            if (custom0xSfxFile) {
-              playCustom0xSfx();
-            } else {
-              playSynthesizerNote(110.00, loseVolume); // Very low A2 pitch
-              setTimeout(() => playSynthesizerNote(98.00, loseVolume), 120); // G2 pitch
-              setTimeout(() => playSynthesizerNote(82.41, loseVolume), 240); // Low E2 fail note
-            }
-          }
-
-          // If ball exits the bottom of the board/canvas
-          if (ball.y - ball.radius > height) {
-            ball.isDead = true;
           }
         });
 
-        // Filter out dead balls after each step's update
+        // Lerp bullet-time slow-mo and camera parameters for butter-smooth cinematic transitions
+        visualEffectsRef.current.slowdownFactor += (slowdownTarget - visualEffectsRef.current.slowdownFactor) * 0.12 * frameDelta;
+        visualEffectsRef.current.targetZoom += (targetCameraZoom - visualEffectsRef.current.targetZoom) * 0.08 * frameDelta;
+      }
+      
+      const dt = isPlaying ? visualEffectsRef.current.slowdownFactor * frameDelta : 0;
+
+      // 2. PHYSICS RESOLUTION
+      if (isPlaying) {
+        const steps = Math.max(1, Math.round(3 * dt));
+        for (let s = 0; s < steps; s++) {
+          const substepDt = dt / steps;
+
+          ballsRef.current.forEach((ball, bIdx) => {
+            if (ball.isDead) return;
+
+            // Gravity acceleration
+            ball.vy += gravity * substepDt;
+            ball.vx *= Math.pow(friction, substepDt);
+            ball.vy *= Math.pow(friction, substepDt);
+
+            // Position velocity mapping
+            ball.x += ball.vx * substepDt;
+            ball.y += ball.vy * substepDt;
+
+            // Trail update
+            if (Math.random() < 0.3) {
+              ball.trail.push({ x: ball.x, y: ball.y });
+              if (ball.trail.length > 12) ball.trail.shift();
+            }
+
+            // Wall boundary bounces
+            if (ball.x - ball.radius < 15) {
+              ball.x = 15 + ball.radius;
+              ball.vx = -ball.vx * bounceDamping;
+            } else if (ball.x + ball.radius > width - 15) {
+              ball.x = width - 15 - ball.radius;
+              ball.vx = -ball.vx * bounceDamping;
+            }
+
+            // Peg collisions
+            const numPegs = pegsRef.current.length;
+            const ballRadius = ball.radius;
+            for (let i = 0; i < numPegs; i++) {
+              const peg = pegsRef.current[i];
+              const dy = ball.y - peg.y;
+              // High-speed vertical spatial check (skip if not within contact range)
+              if (Math.abs(dy) > 23) continue;
+
+              const dx = ball.x - peg.x;
+              // High-speed horizontal spatial check (skip if not within contact range)
+              if (Math.abs(dx) > 23) continue;
+
+              const distance = Math.sqrt(dx * dx + dy * dy);
+              const minDist = ballRadius + peg.radius;
+              
+              if (distance < minDist) {
+                // Push ball outside overlap
+                const overlap = minDist - distance;
+                const nx = dx / (distance || 1);
+                const ny = dy / (distance || 1);
+                ball.x += nx * overlap;
+                ball.y += ny * overlap;
+
+                // Reflect velocity on vector normal
+                const dotProduct = ball.vx * nx + ball.vy * ny;
+                ball.vx = (ball.vx - 2 * dotProduct * nx) * bounceDamping;
+                ball.vy = (ball.vy - 2 * dotProduct * ny) * bounceDamping;
+
+                // Introduce minor scatter jitter to make Plinko random
+                ball.vx += (Math.random() - 0.5) * 0.5;
+
+                // Glow state on peg
+                peg.active = true;
+                peg.activationTime = 12;
+
+                // Synthesize tone mapped to peg vertical height pitch
+                const pegRowIndex = Math.floor((peg.y - 280) / 56);
+                const scaleNote = pentatonicScale[Math.max(0, pentatonicScale.length - 1 - (pegRowIndex % pentatonicScale.length))];
+                if (bounceSoundFile) {
+                  playCustomSfx();
+                } else {
+                  playSynthesizerNote(scaleNote);
+                }
+              }
+            }
+
+            // Check if ball lands in bucket or falls into physical gaps
+            if (ball.y + ball.radius > binY) {
+              const binWidth = width / bucketsRef.current.length;
+              const bucketWidth = binWidth * 0.76; // 76% width, 24% gap spacing!
+              let bucketIndex = Math.floor(ball.x / binWidth);
+              bucketIndex = Math.max(0, Math.min(bucketIndex, bucketsRef.current.length - 1));
+              const bucket = bucketsRef.current[bucketIndex];
+
+              const bucketXStart = bucket.x + (binWidth - bucketWidth) / 2;
+              const bucketXEnd = bucketXStart + bucketWidth;
+
+              // If it hits the solid floor/rim of the bucket
+              if (!ball.isLanded && !ball.isVoidProcessed && ball.x >= bucketXStart && ball.x <= bucketXEnd && ball.y + ball.radius < binY + 28) {
+                ball.isLanded = true;
+
+                // Record scorecard impact
+                setCurrentScoreEffect({
+                  text: bucket.multiplier === 0 ? `0x LOST!` : `+${bucket.label}!`,
+                  color: bucket.multiplier === 0 ? '#ef4444' : bucket.color,
+                  scale: 1.5,
+                });
+                setTimeout(() => setCurrentScoreEffect(null), 1200);
+
+                // Add to wallet balance
+                setWalletBalance((prev) => prev + (10 * bucket.multiplier));
+
+                // Play nice synthesizer jackpot chord
+                if (bucket.multiplier === 100) {
+                  if (custom100xSfxFile) {
+                    playCustom100xSfx();
+                  } else {
+                    playSynthesizerNote(523.25, jackpotVolume); // C5
+                    setTimeout(() => playSynthesizerNote(659.25, jackpotVolume), 80); // E5
+                    setTimeout(() => playSynthesizerNote(783.99, jackpotVolume), 160); // G5
+                    setTimeout(() => playSynthesizerNote(1046.50, jackpotVolume), 240); // C6 super chime
+                  }
+                  triggerHighlightClip(bucket.multiplier, bucket.label);
+                } else if (bucket.multiplier >= 10) {
+                  playSynthesizerNote(523.25, bounceVolume); // C5
+                  setTimeout(() => playSynthesizerNote(659.25, bounceVolume), 80); // E5
+                  setTimeout(() => playSynthesizerNote(783.99, bounceVolume), 160); // G5
+                  triggerHighlightClip(bucket.multiplier, bucket.label);
+                } else if (bucket.multiplier === 0) {
+                  if (custom0xSfxFile) {
+                    playCustom0xSfx();
+                  } else {
+                    playSynthesizerNote(146.83, loseVolume); // Low D3
+                    setTimeout(() => playSynthesizerNote(110.00, loseVolume), 100); // Low A2 failing pitch
+                    setTimeout(() => playSynthesizerNote(82.41, loseVolume), 220); // Low E2 failing pitch
+                  }
+                } else {
+                  playSynthesizerNote(261.63, bounceVolume); // Simple C4 chime
+                }
+
+                // Mark ball as dead after touchdown
+                ball.isDead = true;
+              }
+            }
+
+            // If the ball slipped through a gap and falls past the bucket divider walls
+            if (ball.y - ball.radius > binY + 140 && !ball.isLanded && !ball.isVoidProcessed) {
+              ball.isVoidProcessed = true;
+
+              // No-win void!
+              setCurrentScoreEffect({
+                text: `0x LOST!`,
+                color: '#ef4444', // red
+                scale: 1.3,
+              });
+              setTimeout(() => setCurrentScoreEffect(null), 1500);
+
+              // Play a low-pitch lose/womp custom or synth chime
+              if (custom0xSfxFile) {
+                playCustom0xSfx();
+              } else {
+                playSynthesizerNote(110.00, loseVolume); // Very low A2 pitch
+                setTimeout(() => playSynthesizerNote(98.00, loseVolume), 120); // G2 pitch
+                setTimeout(() => playSynthesizerNote(82.41, loseVolume), 240); // Low E2 fail note
+              }
+            }
+
+            // If ball exits the bottom of the board/canvas
+            if (ball.y - ball.radius > height) {
+              ball.isDead = true;
+            }
+          });
+        }
+
+        // Filter out dead balls once per frame after physics simulation steps complete
         ballsRef.current = ballsRef.current.filter((b) => !b.isDead);
       }
 
@@ -1064,26 +1072,116 @@ export default function PlinkoGame({
         ctx.restore();
       }
 
-      // 8. RECORDING OVERLAYS
-      if (isRecording) {
-        ctx.fillStyle = 'rgba(239, 68, 68, 0.12)';
-        ctx.strokeStyle = '#ef4444';
-        ctx.lineWidth = 10;
-        ctx.strokeRect(5, 5, width - 10, height - 10);
+      // 8. RECORDING & FULL SCREEN CANVAS UI EXPORTS
+      // Draw static top and bottom UI elements onto the canvas so they are captured in recordings
+      // 1. Balance card at the top
+      ctx.save();
+      // Glassmorphic background
+      ctx.fillStyle = 'rgba(9, 13, 22, 0.85)';
+      ctx.strokeStyle = 'rgba(51, 65, 85, 0.8)';
+      ctx.lineWidth = 3;
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+      ctx.shadowBlur = 20;
+      ctx.beginPath();
+      ctx.roundRect(30, 30, 660, 110, 24);
+      ctx.fill();
+      ctx.stroke();
+      ctx.shadowBlur = 0; // reset shadow
 
-        // Blinking REC dot
-        if (Math.floor(Date.now() / 500) % 2 === 0) {
-          ctx.fillStyle = '#ef4444';
-          ctx.beginPath();
-          ctx.arc(45, 60, 15, 0, Math.PI * 2);
-          ctx.fill();
-        }
+      // Coins/Dollar Badge
+      ctx.fillStyle = 'rgba(16, 185, 129, 0.15)';
+      ctx.strokeStyle = 'rgba(16, 185, 129, 0.3)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(55, 50, 70, 70, 18);
+      ctx.fill();
+      ctx.stroke();
 
+      // Coin icon (draw 2 clean nested circles for a dynamic look)
+      ctx.strokeStyle = '#10b981';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(90, 85, 18, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(90, 85, 12, 0, Math.PI * 2);
+      ctx.stroke();
+      // Central Dollar Sign in the badge
+      ctx.fillStyle = '#10b981';
+      ctx.font = 'bold 24px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('$', 90, 85);
+
+      // Total Balance Label Text
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillStyle = '#64748b';
+      ctx.font = 'bold 16px sans-serif';
+      ctx.fillText('TOTAL BALANCE', 145, 75);
+
+      // Dynamic Balance Value
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'black 34px monospace';
+      const balanceStr = `$${walletBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      ctx.fillText(balanceStr, 145, 112);
+
+      // + $100 button on the right
+      ctx.fillStyle = 'rgba(16, 185, 129, 0.12)';
+      ctx.strokeStyle = 'rgba(16, 185, 129, 0.25)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(530, 55, 130, 60, 16);
+      ctx.fill();
+      ctx.stroke();
+
+      // + $100 text
+      ctx.fillStyle = '#34d399';
+      ctx.font = 'bold 20px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('+ $100', 595, 85);
+      ctx.restore();
+
+      // 2. DROP BALL button at the bottom
+      ctx.save();
+      const btnGradient = ctx.createLinearGradient(30, 1150, 690, 1150);
+      btnGradient.addColorStop(0, '#059669'); // emerald-600
+      btnGradient.addColorStop(1, '#0d9488'); // teal-600
+
+      ctx.fillStyle = btnGradient;
+      ctx.shadowColor = 'rgba(4, 120, 87, 0.4)';
+      ctx.shadowBlur = 15;
+      ctx.shadowOffsetY = 4;
+      ctx.beginPath();
+      ctx.roundRect(30, 1150, 660, 90, 24);
+      ctx.fill();
+      ctx.shadowBlur = 0; // reset shadow
+      ctx.shadowOffsetY = 0;
+
+      // Drop Ball Text
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 30px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('DROP BALL ($10.00)', 360, 1195);
+
+      // Star sparkles icon design (draw 2 beautiful small 4-point stars on the left and right of the text)
+      const drawFourPointStar = (cx: number, cy: number, size: number) => {
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 24px sans-serif';
-        ctx.textAlign = 'left';
-        ctx.fillText("REC SHORTS", 75, 68);
-      }
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - size);
+        ctx.quadraticCurveTo(cx, cy, cx + size, cy);
+        ctx.quadraticCurveTo(cx, cy, cx, cy + size);
+        ctx.quadraticCurveTo(cx, cy, cx - size, cy);
+        ctx.quadraticCurveTo(cx, cy, cx, cy - size);
+        ctx.closePath();
+        ctx.fill();
+      };
+
+      drawFourPointStar(150, 1195, 14);
+      drawFourPointStar(570, 1195, 10);
+      ctx.restore();
 
       animationFrameId.current = requestAnimationFrame(updateLoop);
     };
@@ -1097,6 +1195,40 @@ export default function PlinkoGame({
     };
   }, [isPlaying, rows, gravity, friction, bounceDamping, title, subtitle, neonThemeColor, isRecording, subtitleTimer, activeSubtitles, walletBalance]);
 
+  const handleCanvasAction = (clientX: number, clientY: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
+    const canvasX = (clientX - rect.left) * scaleX;
+    const canvasY = (clientY - rect.top) * scaleY;
+
+    // Check bottom "DROP BALL" button (30, 1150, 660, 90)
+    if (canvasX >= 30 && canvasX <= 690 && canvasY >= 1150 && canvasY <= 1240) {
+      dropBall();
+      return;
+    }
+
+    // Check top right "+ $100" button (530, 55, 130, 60)
+    if (canvasX >= 530 && canvasX <= 660 && canvasY >= 55 && canvasY <= 115) {
+      setWalletBalance((prev) => prev + 100);
+      return;
+    }
+  };
+
+  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    handleCanvasAction(e.clientX, e.clientY);
+  };
+
+  const handleCanvasTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (e.touches.length > 0) {
+      handleCanvasAction(e.touches[0].clientX, e.touches[0].clientY);
+    }
+  };
+
   return (
     <div className="flex flex-col items-center justify-center p-3 select-none">
       {/* 9:16 Video Canvas Stage Container */}
@@ -1108,40 +1240,10 @@ export default function PlinkoGame({
           ref={canvasRef} 
           width={720} 
           height={1280} 
-          className="w-full h-full object-contain bg-slate-950"
+          className="w-full h-full object-contain bg-slate-950 cursor-pointer"
+          onClick={handleCanvasClick}
+          onTouchStart={handleCanvasTouchStart}
         />
-
-        {/* Beautiful Floating Wallet Glassmorphic Card */}
-        <div className="absolute top-4 left-4 right-4 bg-slate-950/80 backdrop-blur-md rounded-2xl p-3 border border-slate-800/80 flex items-center justify-between shadow-2xl transition-all">
-          <div className="flex items-center space-x-2.5">
-            <div className="p-2 bg-emerald-500/10 rounded-xl text-emerald-400 border border-emerald-500/20 shadow-inner">
-              <Coins className="h-4 w-4 animate-pulse" />
-            </div>
-            <div className="text-left">
-              <p className="text-[9px] uppercase tracking-wider font-extrabold text-slate-500 font-mono">Total Balance</p>
-              <p className="text-sm font-black text-white font-mono tracking-wide">
-                ${walletBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={() => setWalletBalance((prev) => prev + 100)}
-            className="px-3 py-1.5 text-[10px] font-extrabold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 active:bg-emerald-500/30 rounded-xl border border-emerald-500/20 hover:border-emerald-500/40 shadow-sm transition-all active:scale-95"
-          >
-            + $100
-          </button>
-        </div>
-
-        {/* Drop Ball Action at the Bottom */}
-        <div className="absolute bottom-3 left-3 right-3">
-          <button 
-            onClick={dropBall}
-            className="w-full flex items-center justify-center space-x-1.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-extrabold shadow-lg shadow-emerald-950/50 transform active:scale-[0.98] transition-all"
-          >
-            <Sparkles className="h-3.5 w-3.5" />
-            <span>DROP BALL ($10.00)</span>
-          </button>
-        </div>
       </div>
 
       {/* Media Controller Buttons */}
